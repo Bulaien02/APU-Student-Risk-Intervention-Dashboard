@@ -1,0 +1,21 @@
+[
+  "GENDER",
+  "STUDENT_STATUS",
+  "SCHOOL",
+  "ENTRY_QUALIFICATION",
+  "PROGRESSION_ON_TIME",
+  "GRADUATION_ON_TIME",
+  "Level/Year",
+  "ATTENDANCES",
+  "LOWER_LEVEL",
+  "FINANCIAL_AID",
+  "STUDENT_ORIGIN",
+  "Programme_BSc (Hons) Cyber Security",
+  "Programme_BSc (Hons) in Multimedia Technology",
+  "Programme_Bachelor of Computer Science (Hons) (Artificial Intelligence)",
+  "Programme_Bachelor of Science (Honours) in Computer Science",
+  "Programme_Bachelor of Science (Honours) in Computer Science (Cyber Security)",
+  "Programme_Bachelor of Science (Honours) in Information Technology",
+  "Programme_Bachelor of Science (Hons) in Software Engineering",
+  "AGE"
+]

@@ -1,0 +1,49 @@
+{
+  "created_at_utc": "2025-08-15T04:26:52.810125Z",
+  "files": {
+    "LR_TUNED": [
+      "artifacts_models_v2/lr_tuned.joblib"
+    ],
+    "DT_TUNED": [
+      "artifacts_models_v2/dt_tuned.joblib"
+    ],
+    "RF_TUNED": [
+      "artifacts_models_v2/rf_tuned.joblib"
+    ],
+    "ET_TUNED": [
+      "artifacts_models_v2/et_tuned.joblib"
+    ],
+    "XGB_TUNED": [
+      "artifacts_models_v2/xgb_tuned.joblib",
+      "artifacts_models_v2/xgb_tuned.json"
+    ],
+    "LGBM_TUNED": [
+      "artifacts_models_v2/lgbm_tuned.joblib",
+      "artifacts_models_v2/lgbm_tuned.txt"
+    ],
+    "CAT_TUNED": [
+      "artifacts_models_v2/cat_tuned.joblib",
+      "artifacts_models_v2/cat_tuned.cbm"
+    ],
+    "SOFT_VOTING": [
+      "artifacts_models_v2/soft_voting.joblib"
+    ],
+    "STACKING": [
+      "artifacts_models_v2/stacking.joblib"
+    ]
+  },
+  "feature_order_file": "feature_order.json",
+  "label_map_file": "label_map.json",
+  "metrics_file": "model_summary_metrics.csv",
+  "versions": {
+    "python": "3.13.2",
+    "scikit_learn": "1.6.1",
+    "imblearn": "0.0",
+    "xgboost": "3.0.2",
+    "lightgbm": "4.6.0",
+    "catboost": "1.2.8",
+    "numpy": "2.2.5",
+    "pandas": "2.2.3",
+    "joblib": "1.5.0"
+  }
+}
