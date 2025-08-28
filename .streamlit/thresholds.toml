@@ -1,0 +1,6 @@
+# Risk bucket thresholds (fraction, not %)
+# High risk if P(At-Risk) ≥ high
+# Medium risk if high > P(At-Risk) ≥ medium
+# Low risk otherwise
+high   = 0.60
+medium = 0.35
