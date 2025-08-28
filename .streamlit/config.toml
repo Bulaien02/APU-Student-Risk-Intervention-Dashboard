@@ -1,0 +1,14 @@
+[theme]
+base                     = "dark"          # "light" or "dark"
+primaryColor             = "#22C55E"       # accent (emerald-500)
+backgroundColor          = "#0B1220"       # deep navy background
+secondaryBackgroundColor = "#111827"       # card/containers
+textColor                = "#E5E7EB"       # gray-200
+font                     = "sans serif"    # "sans serif" | "serif" | "monospace"
+
+[server]
+headless = true
+runOnSave = true
+
+[browser]
+gatherUsageStats = false
