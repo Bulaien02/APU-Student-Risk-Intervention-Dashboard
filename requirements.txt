@@ -1,26 +1,25 @@
-# Core
+# --- Core runtime for the app (Cloud-safe) ---
 streamlit==1.36.0
-numpy==1.26.4
+
+# Data + model loading
 pandas==2.2.2
-scikit-learn==1.5.2
-joblib==1.3.2
+numpy==1.26.4
+scikit-learn==1.6.1
+joblib==1.4.2
+
+# IMPORTANT: match your trained model (your artifacts use XGBoost 3.0.2)
+xgboost==3.0.2
+
+# Viz & exports used by the app
 matplotlib==3.8.4
 plotly==5.22.0
+openpyxl==3.1.5
+xlsxwriter==3.2.0
 
-# Model + explainability
-xgboost==3.0.2
-scipy==1.11.4
-shap==0.46.0
-numba==0.59.1
-llvmlite==0.42.0
-
-# Excel export
-openpyxl==3.1.2
-
-# Gemini
-google-generativeai==0.8.5
-
-# Fetching docs (RAG helpers)
+# RAG / docs helpers used by the app
 requests==2.31.0
 beautifulsoup4==4.12.3
-pypdf==4.3.1
+pypdf==4.2.0
+
+# Gemini client
+google-generativeai==0.8.5
