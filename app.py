@@ -251,44 +251,86 @@ def header():
     apu_b64 = _b64(apu) if apu else ""
     dmu_b64 = _b64(dmu) if dmu else ""
 
+    llm_text = f"LLM: Gemini ({GEM_MODEL})" if HAS_GEMINI else "LLM: fallback template (no key)"
+
+    # Styles (centered title with robust 3-column grid)
     st.markdown(
         """
         <style>
           :root { --card-bg: rgba(255,255,255,.04); --line: rgba(255,255,255,.08); }
-          .brand {display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-radius:14px; background:var(--card-bg); border:1px solid var(--line); margin-bottom:10px}
-          .brand .badge{ background:rgba(255,255,255,.98); border-radius:12px; padding:6px 10px; box-shadow:0 6px 22px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.85)}
-          .brand h1{margin:0 0 2px 0; font-weight:800; font-size:1.4rem}
-          .brand p {margin:0; font-size:.8rem; opacity:.75}
+
+          /* 3-column grid: left | center(auto) | right; center stays truly centered */
+          .brand{
+            display:grid;
+            grid-template-columns: 1fr auto 1fr;
+            align-items:center;
+            column-gap:12px;
+            padding:12px 16px;
+            border-radius:14px;
+            background:var(--card-bg);
+            border:1px solid var(--line);
+            margin-bottom:10px;
+          }
+
+          .brand > :first-child{ justify-self:start; }
+          .brand > :nth-child(2){ justify-self:center; text-align:center; }
+          .brand > :last-child{
+            justify-self:end;
+            display:flex; align-items:center; gap:10px; max-width:100%;
+          }
+
+          .badge{
+            background:rgba(255,255,255,.98);
+            border-radius:12px; padding:6px 10px;
+            box-shadow:0 6px 22px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.85);
+          }
           .logo {height:50px; width:auto; object-fit:contain}
-          .chip {border:1px solid var(--line); padding:4px 10px; border-radius:999px; font-size:.75rem; opacity:.95}
+
+          .chip {
+            border:1px solid var(--line);
+            padding:4px 10px; border-radius:999px;
+            font-size:.75rem; opacity:.95; white-space:nowrap;
+          }
           .ok   {background:rgba(76,175,80,.18)}
           .warn {background:rgba(255,152,0,.18)}
-          .chips-row {display:flex; flex-wrap:wrap; gap:8px}
-          .diag {padding:10px 12px; border:1px dashed var(--line); border-radius:12px}
+
+          @media (max-width:780px){
+            .brand{ grid-template-columns:1fr; row-gap:8px; text-align:center; }
+            .brand > :first-child, .brand > :last-child{ justify-self:center; }
+            .chip{ white-space:normal; } /* allow wrap on small screens */
+          }
         </style>
         """,
         unsafe_allow_html=True,
     )
 
-    llm_text  = f"LLM: Gemini ({GEM_MODEL})" if HAS_GEMINI else "LLM: fallback template (no key)"
-
+    # Markup
     st.markdown(
         f"""
         <div class="brand">
-          <div class="badge">{('<img class="logo" src="data:image/*;base64,'+ apu_b64 + '">') if apu_b64 else ''}</div>
-          <div style="text-align:center">
-            <h2>APU Predictive Academic Intervention Dashboard</h1>
-            <p>RAG • SHAP/LIME • Gemini • XGBoost</p>
+          <div class="badge">
+            {('<img class="logo" src="data:image/*;base64,'+ apu_b64 + '">') if apu_b64 else ''}
           </div>
-          <div style="display:flex;gap:10px;align-items:center">
+
+          <div>
+            <h1 style="margin:0 0 2px 0; font-weight:800; font-size:1.6rem">
+              APU Predictive Academic Intervention Dashboard
+            </h1>
+            <p style="margin:0; font-size:.85rem; opacity:.8">
+              RAG • SHAP/LIME • Gemini • XGBoost
+            </p>
+          </div>
+
+          <div>
             <span class="chip {'ok' if (HAS_GEMINI and GENAI_OK) else 'warn'}">{llm_text}</span>
-            <div class="badge">{('<img class="logo" src="data:image/*;base64,'+ dmu_b64 + '">') if dmu_b64 else ''}</div>
+            <div class="badge">
+              {('<img class="logo" src="data:image/*;base64,'+ dmu_b64 + '">') if dmu_b64 else ''}
+            </div>
           </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
-
 header()
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1305,3 +1347,4 @@ with tab_compare:
         delta  = (p_scn - p_base) * 100.0
         sign   = "↓" if delta < 0 else ("↑" if delta > 0 else "→")
         st.markdown(f"**Δ P(At-Risk): {sign} {abs(delta):.1f} pp**  (Base {p_base*100:.1f}% → Scenario {p_scn*100:.1f}%)")
+
