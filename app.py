@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Page config
-st.set_page_config(page_title="APU Personalized Intervention", page_icon="🎓", layout="wide")
+st.set_page_config(page_title="APU Predictive Academic Intervention Dashboard", page_icon="🎓", layout="wide")
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Project root detection
@@ -277,7 +277,7 @@ def header():
         <div class="brand">
           <div class="badge">{('<img class="logo" src="data:image/*;base64,'+ apu_b64 + '">') if apu_b64 else ''}</div>
           <div style="text-align:center">
-            <h1>APU Personalized Intervention</h1>
+            <h2>APU Predictive Academic Intervention Dashboard</h1>
             <p>RAG • SHAP/LIME • Gemini • XGBoost</p>
           </div>
           <div style="display:flex;gap:10px;align-items:center">
