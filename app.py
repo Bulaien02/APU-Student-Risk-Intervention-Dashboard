@@ -1,7 +1,7 @@
 # path: notebooks/app.py
 from __future__ import annotations
 
-import os, sys, json, base64, random, html, io, datetime
+import os, sys, json, base64, random, html, io, datetime, time
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 from collections.abc import Mapping
@@ -172,7 +172,7 @@ def load_thresholds() -> Dict[str, float]:
 THRESH = load_thresholds()
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Gemini-preferred wrappers (robust; retry; fallback only if Gemini truly fails)
+# Gemini-preferred wrappers
 def _safe_call_generate_row(X_one, X_test, model, label_map, doc_index, tone):
     try:
         return generate_intervention_for_row(
@@ -271,7 +271,6 @@ def header():
             border:1px solid var(--line);
             margin-bottom:10px;
           }
-
           .brand > :first-child{ justify-self:start; }
           .brand > :nth-child(2){ justify-self:center; text-align:center; }
           .brand > :last-child{
@@ -294,17 +293,29 @@ def header():
           .ok   {background:rgba(76,175,80,.18)}
           .warn {background:rgba(255,152,0,.18)}
 
+          /* ✨ Decorative bits */
+          .title-gradient{
+            margin:0 0 2px 0; font-weight:800; font-size:1.6rem;
+            background:linear-gradient(90deg,#e8f0ff,#b1c6ff,#9cf1e0);
+            -webkit-background-clip:text; background-clip:text; color:transparent;
+            text-shadow:0 0 18px rgba(128,170,255,.18);
+          }
+          .chip.pulse{ animation:pulse 2.4s ease-in-out infinite; }
+          @keyframes pulse{
+            0%,100%{ box-shadow:0 0 0 rgba(99,179,237,0); }
+            50%{ box-shadow:0 0 18px rgba(99,179,237,.35); }
+          }
+
           @media (max-width:780px){
             .brand{ grid-template-columns:1fr; row-gap:8px; text-align:center; }
             .brand > :first-child, .brand > :last-child{ justify-self:center; }
-            .chip{ white-space:normal; } /* allow wrap on small screens */
+            .chip{ white-space:normal; }
           }
         </style>
         """,
         unsafe_allow_html=True,
     )
 
-    # Markup
     st.markdown(
         f"""
         <div class="brand">
@@ -313,7 +324,7 @@ def header():
           </div>
 
           <div>
-            <h1 style="margin:0 0 2px 0; font-weight:800; font-size:1.6rem">
+            <h1 class="title-gradient">
               APU Predictive Academic Intervention Dashboard
             </h1>
             <p style="margin:0; font-size:.85rem; opacity:.8">
@@ -322,7 +333,7 @@ def header():
           </div>
 
           <div>
-            <span class="chip {'ok' if (HAS_GEMINI and GENAI_OK) else 'warn'}">{llm_text}</span>
+            <span class="chip pulse {'ok' if (HAS_GEMINI and GENAI_OK) else 'warn'}">{llm_text}</span>
             <div class="badge">
               {('<img class="logo" src="data:image/*;base64,'+ dmu_b64 + '">') if dmu_b64 else ''}
             </div>
@@ -331,6 +342,7 @@ def header():
         """,
         unsafe_allow_html=True,
     )
+
 header()
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -360,8 +372,139 @@ st.markdown("""
 .badge-high{background:rgba(244, 67, 54,.18)}
 .badge-med{background:rgba(255, 152, 0,.18)}
 .badge-low{background:rgba(76, 175, 80,.18)}
+
+/* Primary button micro-interactions */
+div.stButton > button[kind="primary"]{
+  transition: transform .08s ease, box-shadow .08s ease;
+  box-shadow: 0 8px 24px rgba(0,0,0,.18);
+}
+div.stButton > button[kind="primary"]:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 10px 28px rgba(0,0,0,.22);
+}
 </style>
 """, unsafe_allow_html=True)
+
+# Small "About" expander
+# --- Professional About panel (replace your current expander) ---
+def render_about_panel():
+    hi = int(THRESH.get("high", 0.60) * 100)
+    med = int(THRESH.get("medium", 0.35) * 100)
+    llm_label = f"Gemini ({GEM_MODEL})" if (HAS_GEMINI and GENAI_OK) else "Fallback (no key detected)"
+
+    with st.expander("ℹ️ About this dashboard", expanded=False):
+        st.markdown(
+            f"""
+            ### APU Predictive Academic Intervention Dashboard
+            This application helps staff **identify at-risk students early**, **explain the drivers** behind each prediction, and **generate tailored intervention plans** grounded in APU resources.
+
+            **What you’ll get on every run**
+            - **Risk**: At-Risk / Average / Excellent, with probabilities  
+            - **Why**: Top drivers (SHAP & LIME) in plain language  
+            - **Action**: A structured, tone-aware plan (LLM: **{llm_label}**) plus relevant APU links  
+            - **Operations**: Filter & triage, split by advisor, and export CSV/Excel
+            """,
+            unsafe_allow_html=False,
+        )
+
+        tab_overview, tab_quickstart, tab_methods, tab_govern = st.tabs(
+            ["Overview", "Quick start", "How it works", "Data & governance"]
+        )
+
+        with tab_overview:
+            col1, col2 = st.columns([1.2, 1])
+            with col1:
+                st.markdown(
+                    f"""
+                    **Who is this for**
+                    - Academic advisors and programme leaders
+                    - Student services and success teams
+
+                    **Risk bands**
+                    - **High**: ≥ {hi}% P(At-Risk)  
+                    - **Medium**: ≥ {med}% and &lt; {hi}%  
+                    - **Low**: &lt; {med}%  
+
+                    **Key ideas**
+                    - *Predict → Explain → Act*: model prediction, explainability for trust, and a concrete plan.
+                    - Plans are **grounded** in APU resources (docs/links); the LLM drafts, you decide.
+                    """
+                )
+            with col2:
+                st.markdown(
+                    """
+                    **Main tabs**
+                    - **Manual entry** – Try a single student profile and get a plan.
+                    - **Demo (on-demand)** – Sample an existing row to see end-to-end output.
+                    - **Triage** – Rank, filter, capacity-limit, split by advisor, export.
+                    - **Scenario Compare** – Tweak key levers (attendance, level, etc.) and compare risk/plan side-by-side.
+                    """
+                )
+
+        with tab_quickstart:
+            st.markdown(
+                """
+                **1) Manual entry**
+                - Select values for each field → **Predict & generate plan**  
+                - Review probabilities, top drivers, and the generated plan  
+                - Download CSV/Excel/JSON if needed
+
+                **2) Triage**
+                - Filter by programme/level/attendance → set **Capacity**  
+                - (Optional) **Show reasons** to append top SHAP drivers  
+                - **Split by advisor** and export
+
+                **3) Scenario Compare**
+                - Choose a base row → adjust scenario controls  
+                - Use quick actions (toggle/cycle) or **Apply playbook**  
+                - **Run compare** to see how risk and plan change
+                """
+            )
+
+        with tab_methods:
+            st.markdown(
+                """
+                **Model**
+                - Supervised classifier (XGBoost); features include demographics, programme one-hots, and academic indicators.
+                - Outputs class probabilities and predicted label.
+
+                **Explainability**
+                - **SHAP** highlights features pushing *toward* the At-Risk class.
+                - **LIME** offers a complementary local explanation.
+                - We show the **top-3** contributors for quick sense-making.
+
+                **Intervention plans**
+                - Generated with an LLM (Gemini when available).  
+                - Plans are constrained to APU resources and study-skills guidance; advisors remain the final decision-makers.
+
+                **Thresholds**
+                - Risk bands are configurable via `.streamlit/thresholds.toml` (current High ≥ {hi}%, Medium ≥ {med}%).
+                """
+            )
+
+        with tab_govern:
+            st.markdown(
+                """
+                **Data handling**
+                - The app does **not** persist raw student data unless you explicitly export or append to logs.
+                - Optional advising logs are written to `logs/advising_log.csv` on demand.
+
+                **API keys**
+                - The LLM key is loaded from `st.secrets` or `.streamlit/secrets.toml`. If absent, a safe fallback template is used.
+
+                **Good practice**
+                - Use the tool to inform professional judgement, not replace it.
+                - Treat outputs as decision support and review plans before sharing.
+
+                **Support & maintenance**
+                - Thresholds, labels, and resources are configurable (see `docs/` and `.streamlit/`).
+                - If something looks off, please report the input, expected behaviour, and a screenshot/log snippet.
+                """
+            )
+
+# Call this once where you previously had the simple expander:
+render_about_panel()
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Helpers
@@ -452,7 +595,36 @@ def _feature_pills(title: str, items: list[str], kind: str):
                     for x in items)
     st.markdown(f"**{title}:**<div class='pills'>{pills}</div>", unsafe_allow_html=True)
 
+def _risk_gauge(p_atrisk: float):
+    """Plotly gauge for P(At-Risk) in [0,1]."""
+    try:
+        import plotly.graph_objects as go
+        fig = go.Figure(go.Indicator(
+            mode="gauge+number",
+            value=max(0.0, min(100.0, p_atrisk*100)),
+            number={'suffix': '%', 'font': {'size': 32}},
+            gauge={
+                'axis': {'range': [0, 100]},
+                'bar': {'thickness': 0.25},
+                'steps': [
+                    {'range': [0, THRESH['medium']*100], 'color': 'rgba(76,175,80,.25)'},
+                    {'range': [THRESH['medium']*100, THRESH['high']*100], 'color': 'rgba(255,152,0,.25)'},
+                    {'range': [THRESH['high']*100, 100], 'color': 'rgba(244,67,54,.30)'},
+                ],
+            }
+        ))
+        fig.update_layout(height=220, margin=dict(l=10, r=10, t=10, b=10))
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    except Exception:
+        pass
+
 def _render_plan(plan: Dict[str, Any], tone: str, llm_source: str, dl_key: str):
+    # Risk badge
+    risk_text = str(plan.get("risk_level", "-")).strip().title()
+    risk_cls_map = {"High": "badge-high", "Medium": "badge-med", "Low": "badge-low"}
+    risk_cls = risk_cls_map.get(risk_text, "")
+
+    # Resources list
     resources_html = ""
     for r in plan.get("resources", []):
         title = r.get("title", "")
@@ -461,26 +633,39 @@ def _render_plan(plan: Dict[str, Any], tone: str, llm_source: str, dl_key: str):
             resources_html += f'<li><a href="{url}" target="_blank">{html.escape(title)}</a></li>'
         else:
             resources_html += f"<li>{html.escape(title)}</li>"
+
     llm_badge = "Gemini" if str(llm_source).lower() == "gemini" else "Fallback"
+
     st.markdown(
         f"""
         <div style="padding:14px;border:1px solid rgba(255,255,255,.18);border-radius:12px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-            <div><span style="opacity:.85">Tone</span>
-              <span style="padding:3px 8px;border:1px solid rgba(255,255,255,.25);border-radius:999px">{tone.title()}</span>
-              <span class="badge-src">{llm_badge}</span>
-            </div>
-            <div style="opacity:.75">Risk level</div>
+
+          <!-- Top: Tone + Model -->
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+            <span style="opacity:.85">Tone</span>
+            <span class="chip">{tone.title()}</span>
+            <span class="badge-src">{llm_badge}</span>
           </div>
-          <div style="font-weight:800;margin-top:-8px;margin-bottom:8px;font-size:1.05rem">{html.escape(str(plan.get('risk_level','-')).title())}</div>
+
+          <!-- Risk level row (left aligned, its own line) -->
+          <div style="display:flex;align-items:center;gap:10px;margin:4px 0 12px 0">
+            <span style="opacity:.75">Risk level</span>
+            <span class="chip {risk_cls}" style="font-weight:700">{html.escape(risk_text)}</span>
+          </div>
+
+          <!-- Sections -->
           <div style="opacity:.75;margin-bottom:4px">Why</div>
           <div style="margin-bottom:12px">{html.escape(plan.get('why_model_thinks_so',''))}</div>
+
           <div style="opacity:.75;margin-bottom:4px">Study plan</div>
           <ul style="margin-top:0">{''.join(f'<li>{html.escape(str(x))}</li>' for x in plan.get('study_plan',[]))}</ul>
+
           <div style="opacity:.75;margin:10px 0 4px">Follow-up actions</div>
           <ul style="margin-top:0">{''.join(f'<li>{html.escape(str(x))}</li>' for x in plan.get('follow_up_actions',[]))}</ul>
+
           <div style="opacity:.75;margin:10px 0 4px">Resources</div>
           <ul style="margin-top:0">{resources_html}</ul>
+
           <div style="opacity:.55;margin-top:10px;font-size:12px">
             Citations: {', '.join(html.escape(str(c)) for c in plan.get('citations', []))}
           </div>
@@ -488,6 +673,7 @@ def _render_plan(plan: Dict[str, Any], tone: str, llm_source: str, dl_key: str):
         """,
         unsafe_allow_html=True,
     )
+
     st.download_button(
         "Download plan (JSON)",
         data=json.dumps(plan, indent=2).encode("utf-8"),
@@ -496,6 +682,42 @@ def _render_plan(plan: Dict[str, Any], tone: str, llm_source: str, dl_key: str):
         use_container_width=True,
         key=dl_key,
     )
+
+
+# 🎊 Confetti effect (CSS-only, auto-cleans)
+def _confetti(n: int = 80, duration: float = 2.6):
+    colors = ['#f44336','#ff9800','#ffeb3b','#4caf50','#2196f3','#9c27b0']
+    pieces = []
+    for _ in range(n):
+        left = random.randint(0,100)
+        delay = random.uniform(0,0.6)
+        dur = random.uniform(duration*0.7, duration*1.2)
+        size = random.randint(6,10)
+        color = random.choice(colors)
+        rotate = random.randint(-180,180)
+        pieces.append(
+            f'<span style="left:{left}vw; width:{size}px; height:{int(size*1.6)}px; '
+            f'background:{color}; animation-duration:{dur}s; animation-delay:{delay}s; '
+            f'transform: rotate({rotate}deg)"></span>'
+        )
+    html_confetti = f'''
+    <div class="confetti">{''.join(pieces)}</div>
+    <style>
+      .confetti {{ position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 9999; }}
+      .confetti span {{
+          position: absolute; top: -10vh; opacity:.95; border-radius:2px;
+          animation-name: confettiFall; animation-timing-function: linear; animation-fill-mode: forwards;
+      }}
+      @keyframes confettiFall {{
+        0%   {{ transform: translateY(-10vh) rotate(0deg); }}
+        100% {{ transform: translateY(110vh) rotate(360deg); }}
+      }}
+    </style>
+    '''
+    ph = st.empty()
+    ph.markdown(html_confetti, unsafe_allow_html=True)
+    time.sleep(duration + 0.8)
+    ph.empty()
 
 # Export helpers
 def _flatten_for_csv(run_id: str, tone: str, llm_source: str,
@@ -693,10 +915,15 @@ with tab_manual:
             st.error(f"Plan generation failed: {e}", icon="🚫")
             st.stop()
 
+        # ✨ little celebration + toast
+        st.toast("Prediction ready", icon="✨")
+        _confetti(n=100, duration=2.4)
+
         left, right = st.columns([1.2, 1])
         with left:
             st.markdown("### Predicted class & probabilities")
             _banner(out["prediction"]["pred_label"], out["prediction"]["proba_dict"])
+            _risk_gauge(out["prediction"]["proba_dict"].get("At-Risk", 0.0))
             _bar(out["prediction"]["proba_dict"])
             st.markdown("### Top features")
             cA, cB = st.columns(2)
@@ -762,6 +989,7 @@ with tab_demo:
         with left:
             st.markdown("### Predicted class & probabilities")
             _banner(out["prediction"]["pred_label"], out["prediction"]["proba_dict"])
+            _risk_gauge(out["prediction"]["proba_dict"].get("At-Risk", 0.0))
             _bar(out["prediction"]["proba_dict"])
             st.markdown("### Top features")
             cA, cB = st.columns(2)
@@ -829,55 +1057,32 @@ def _pretty_feat(name: str) -> str:
 # ---------- SHAP helpers (robust + cached) ----------
 @st.cache_resource(show_spinner=False)
 def _build_shap_explainer(_model, background_df: pd.DataFrame):
-    """
-    Try multiple explainer strategies, cached across reruns:
-    1) TreeExplainer(model)
-    2) TreeExplainer(model.get_booster())  # XGBoost native booster
-    3) Generic Explainer with small background
-    Returns: (explainer, description_str)
-    """
     import shap
-
-    # 1) Native tree path
     try:
         return shap.TreeExplainer(_model), "TreeExplainer(model)"
     except Exception:
         pass
-
-    # 2) XGBoost booster path
     try:
         booster = getattr(_model, "get_booster", lambda: None)()
         if booster is not None:
             return shap.TreeExplainer(booster), "TreeExplainer(booster)"
     except Exception:
         pass
-
-    # 3) Generic path (Kernel/Linear/Perm depending on model)
     try:
         bg = background_df.sample(min(200, len(background_df)), random_state=0)
         return shap.Explainer(_model, bg), "Explainer(generic)"
     except Exception:
-        # Let caller handle the failure
         raise
 
-
 def _shap_values_for_target(explainer, X_batch: pd.DataFrame, model, label_map: dict, target_name: str = "At-Risk"):
-    """
-    Run explainer and normalize outputs to a (n_samples, n_features) array
-    for the requested target class in multiclass setups.
-    Handles both old (list-of-arrays) and new (Explanation) SHAP APIs.
-    """
     import numpy as np
-
     sv = None
     try:
         sv = explainer.shap_values(X_batch)
     except Exception:
-        # Newer API: explainer(X) returns Explanation
         exp = explainer(X_batch)
         sv = getattr(exp, "values", exp)
 
-    # Old API (multiclass) -> list of [n_classes] arrays
     if isinstance(sv, list):
         label_to_idx = {v: k for k, v in label_map.items()}
         if target_name in label_to_idx and hasattr(model, "classes_"):
@@ -887,10 +1092,8 @@ def _shap_values_for_target(explainer, X_batch: pd.DataFrame, model, label_map: 
             target_ix = 0
         return np.asarray(sv[target_ix])
 
-    # New(er) API arrays (or Explanation.values)
     vals = np.asarray(getattr(sv, "values", sv))
     if vals.ndim == 3:
-        # shape: (n_samples, n_classes, n_features)
         label_to_idx = {v: k for k, v in label_map.items()}
         if target_name in label_to_idx and hasattr(model, "classes_"):
             target_code = label_to_idx[target_name]
@@ -898,7 +1101,6 @@ def _shap_values_for_target(explainer, X_batch: pd.DataFrame, model, label_map: 
         else:
             target_ix = 0
         return vals[:, target_ix, :]
-    # shape: (n_samples, n_features)
     return vals
 # ---------- /SHAP helpers ----------
 
@@ -928,9 +1130,8 @@ with tab_triage:
     show_reasons = st.checkbox("Show reasons (SHAP top-3) for selected", value=False, key="triage_reasons")
     if show_reasons and not selected.empty:
         try:
-            import shap  # ensure available
+            import shap
 
-            # --- reusable labeler for human-friendly feature=value ---
             def _feat_value_label(col: str, v, row) -> str:
                 try:
                     iv = int(v)
@@ -951,22 +1152,20 @@ with tab_triage:
                 if col == "STUDENT_ORIGIN":
                     return f"Origin={'International' if iv==1 else 'Local'}"
                 if col == "Level/Year":
-                    return f"Level={{0:'Level 1',1:'Level 2',2:'Level 3'}}.get(iv, str(iv))".format()
+                    mapping = {0: 'Level 1', 1: 'Level 2', 2: 'Level 3'}
+                    return f"Level={mapping.get(iv, str(iv))}"
                 if col == "AGE":
                     return f"Age≈{_z_to_years(float(v))}"
                 if col.startswith("Programme_"):
                     name = col.replace("Programme_","").replace("_"," ")
                     return f"Programme: {name}={'Yes' if iv==1 else 'No'}"
-                # default
                 if isinstance(v, (int, float, np.floating, np.integer)):
                     return f"{_pretty_feat(col)}={float(v):.2f}"
                 return f"{_pretty_feat(col)}={v}"
 
-            # Build/reuse explainer (from the helpers you already added)
             background = X_test[feature_order]
             explainer, expl_kind = _build_shap_explainer(model, background)
 
-            # Compute SHAP for selected rows for the At-Risk class
             idxs = selected.index.values
             X_sel = X_test.loc[idxs, feature_order]
             S = _shap_values_for_target(explainer, X_sel, model, label_map, target_name="At-Risk")
@@ -975,15 +1174,13 @@ with tab_triage:
             reasons_list = []
 
             for r_ix in range(len(X_sel)):
-                row_vals = S[r_ix]                  # shap values for this row (n_features,)
-                row_feat = X_sel.iloc[r_ix]         # the actual feature values
+                row_vals = S[r_ix]
+                row_feat = X_sel.iloc[r_ix]
 
-                # Prefer positive contributors (push toward At-Risk)
                 pos_ix = np.where(row_vals > 0)[0]
                 pos_sorted = pos_ix[np.argsort(row_vals[pos_ix])[::-1]]
                 chosen = list(pos_sorted[:3])
 
-                # If fewer than 3 positives, fill with largest |shap|
                 if len(chosen) < 3:
                     abs_sorted = np.argsort(np.abs(row_vals))[::-1]
                     for j in abs_sorted:
@@ -996,7 +1193,7 @@ with tab_triage:
                 for j in chosen:
                     name = cols[j]
                     val  = row_feat[name]
-                    arrow = "↑" if row_vals[j] > 0 else "↓"  # toward or away from At-Risk
+                    arrow = "↑" if row_vals[j] > 0 else "↓"
                     parts.append(f"{_feat_value_label(name, val, row_feat)} {arrow}{abs(row_vals[j]):.2f}")
                 reasons_list.append(" | ".join(parts))
 
@@ -1006,7 +1203,6 @@ with tab_triage:
             st.warning("Install SHAP to enable reasons: `pip install shap==0.45.0`", icon="⚠️")
         except Exception as e:
             st.warning(f"SHAP not available ({type(e).__name__}: {e}); skipping reasons.", icon="⚠️")
-
 
     bucket_labels = []
     for p in selected["P_AtRisk"].values:
@@ -1029,7 +1225,19 @@ with tab_triage:
 
     show_cols = ["row_id","P_AtRisk","Bucket","predicted","Programme","Level","Attendance"]
     if "Reasons" in table.columns: show_cols.append("Reasons")
-    st.dataframe(table[show_cols], use_container_width=True, hide_index=True)
+    st.dataframe(
+        table[show_cols],
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "P_AtRisk": st.column_config.ProgressColumn(
+                "P(At-Risk)",
+                help="Higher means greater likelihood of being at-risk",
+                min_value=0, max_value=100, format="%.1f%%",
+            ),
+            "Bucket": st.column_config.TextColumn(width="small"),
+        }
+    )
 
     csv_bytes = table[show_cols].to_csv(index=False).encode("utf-8")
     st.download_button("Download Triage (CSV)", data=csv_bytes,
@@ -1092,7 +1300,7 @@ with tab_triage:
                 st.error(f"Failed to write log: {e}")
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Scenario Compare preset helpers
+# Scenario Compare helpers (preset queue)
 def _pending_bucket_key(base_idx: int) -> str:
     return f"__pending_presets__{base_idx}"
 
@@ -1116,8 +1324,18 @@ def _apply_pending_presets_if_any(base_idx: int) -> None:
     for k, v in bucket.items():
         st.session_state[k] = v
 
+# ✅ Helper: first render uses default index, afterwards rely purely on session_state
+def _selectbox_ss(label: str, options: list[str], key: str, default_value: str):
+    if key in st.session_state:
+        return st.selectbox(label, options, key=key)
+    try:
+        default_idx = options.index(default_value)
+    except ValueError:
+        default_idx = 0
+    return st.selectbox(label, options, index=default_idx, key=key)
+
 # ──────────────────────────────────────────────────────────────────────────────
-# SCENARIO COMPARE (aligned quick-actions under each select + level cycler)
+# SCENARIO COMPARE
 with tab_compare:
     st.caption("Clone a student, tweak inputs, and compare risk & plan. Gemini-first; fallback only if Gemini fails.")
 
@@ -1151,36 +1369,23 @@ with tab_compare:
         j = int(np.argmax(base_row[prog_cols].values))
         cur_prog = prog_names[j] if base_row[prog_cols[j]] == 1 else "Unknown"
 
-    # Controls row
+    # Controls row (using session-state-aware selectbox)
     c1, c2, c3, c4 = st.columns(4)
     with c1:
-        st.selectbox("Attendance (scenario)", ["Above 80%","Below 80%"],
-                     index=0 if st.session_state.get(att_key, att_label) == "Above 80%" else 1,
-                     key=att_key)
+        _selectbox_ss("Attendance (scenario)", ["Above 80%","Below 80%"], att_key, att_label)
     with c2:
-        st.selectbox("Level/Year (scenario)", ["Level 1","Level 2","Level 3"],
-                     index=["Level 1","Level 2","Level 3"].index(st.session_state.get(level_key, cur_level)),
-                     key=level_key)
+        _selectbox_ss("Level/Year (scenario)", ["Level 1","Level 2","Level 3"], level_key, cur_level)
     with c3:
-        st.selectbox("Financial Aid (scenario)", ["Yes","No"],
-                     index=0 if st.session_state.get(fin_key, fin_label) == "Yes" else 1,
-                     key=fin_key)
+        _selectbox_ss("Financial Aid (scenario)", ["Yes","No"], fin_key, fin_label)
     with c4:
-        st.selectbox("Lower Level (scenario)", ["No","Yes"],
-                     index=0 if st.session_state.get(low_key, low_label) == "No" else 1,
-                     key=low_key)
+        _selectbox_ss("Lower Level (scenario)", ["No","Yes"], low_key, low_label)
 
     c5, c6 = st.columns([2, 2])
     with c5:
-        def_idx = (sorted_prog.index(st.session_state.get(prog_key, cur_prog))
-                   if sorted_prog and st.session_state.get(prog_key, cur_prog) in sorted_prog else 0)
-        st.selectbox("Programme (scenario)", sorted_prog if sorted_prog else ["Unknown"],
-                     index=def_idx, key=prog_key)
+        _selectbox_ss("Programme (scenario)", sorted_prog if sorted_prog else ["Unknown"], prog_key, cur_prog)
     with c6:
         age_choices = [str(i) for i in range(16, 61)]
-        def_age = str(st.session_state.get(age_key, cur_age_yr))
-        def_idx = age_choices.index(def_age) if def_age in age_choices else 20
-        st.selectbox("Age (years, scenario)", age_choices, index=def_idx, key=age_key)
+        _selectbox_ss("Age (years, scenario)", age_choices, age_key, str(cur_age_yr))
 
     # Current values (after possible rerun from queued presets)
     now_att  = st.session_state.get(att_key,  att_label)
@@ -1193,31 +1398,27 @@ with tab_compare:
     # Aligned quick actions under each select
     b1, b2, b3, b4 = st.columns(4)
 
-    # 1) Attendance toggle
     with b1:
         st.caption(f"Attendance: **{now_att}**")
         next_att = "Below 80%" if now_att == "Above 80%" else "Above 80%"
         if st.button(f"Toggle attendance ⇒ {next_att}", use_container_width=True, key=f"toggle_att_{base_idx}"):
             _queue_preset_value(att_key, next_att, base_idx)
 
-    # 2) Level cycler (L1 → L2 → L3 → L1)
     with b2:
         st.caption(f"Level: **{now_lvl}**")
         levels = ["Level 1", "Level 2", "Level 3"]
-        if now_lvl not in levels:  # safety
+        if now_lvl not in levels:
             now_lvl = cur_level
         next_lvl = levels[(levels.index(now_lvl) + 1) % 3]
         if st.button(f"Cycle level → {next_lvl}", use_container_width=True, key=f"cycle_lvl_{base_idx}"):
             _queue_preset_value(level_key, next_lvl, base_idx)
 
-    # 3) Financial aid toggle
     with b3:
         st.caption(f"Financial aid: **{now_fin}**")
         next_fin = "No" if now_fin == "Yes" else "Yes"
         if st.button(f"Toggle financial aid ⇒ {next_fin}", use_container_width=True, key=f"toggle_fin_{base_idx}"):
             _queue_preset_value(fin_key, next_fin, base_idx)
 
-    # 4) Lower-level toggle + Reset to base (stacked)
     with b4:
         st.caption(f"Lower level: **{now_low}**")
         next_low = "No" if now_low == "Yes" else "Yes"
@@ -1233,7 +1434,6 @@ with tab_compare:
                 age_key:   str(cur_age_yr),
             }, base_idx)
 
-    # Changed-vs-base chips (context)
     chips = [
         ("Attendance", now_att, att_label),
         ("Level", now_lvl, cur_level),
@@ -1251,21 +1451,16 @@ with tab_compare:
         f"<div class='pills' style='margin-top:8px; margin-bottom:22px'>{pill_html}</div>",
         unsafe_allow_html=True
     )
-
-    # Playbook: Stabilize & Support (single button + description)
-    # Purpose: Quickly set a supportive baseline scenario for comparison:
-    # Attendance ≥80%, Financial aid = Yes, Lower level = No.
-    # It does NOT change Programme, Level/Year, or Age.
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)  # spacer
 
     playbook_text = (
         "Quick preset bundle: sets **Attendance ≥ 80%**, **Financial aid = Yes**, "
         "and **Lower level = No**. Leaves Programme, Level/Year, and Age unchanged."
     )
-
     clicked_playbook = st.button(
         "Apply playbook: Stabilize & Support",
         use_container_width=True,
-        key=f"playbook_stab_main_{base_idx}",   # unique key to avoid duplicates
+        key=f"playbook_stab_main_{base_idx}",
         help="Sets Attendance ≥80%, Financial aid = Yes, Lower level = No"
     )
     st.caption(playbook_text)
@@ -1277,10 +1472,8 @@ with tab_compare:
             low_key: "No",
         }, base_idx)
 
-    # Run compare
     if st.button("Run compare", type="primary", use_container_width=True, key=f"btn_run_compare_{base_idx}"):
         try:
-            # Re-read in case user changed anything this run
             now_att  = st.session_state.get(att_key,  att_label)
             now_lvl  = st.session_state.get(level_key, cur_level)
             now_fin  = st.session_state.get(fin_key,  fin_label)
@@ -1288,12 +1481,10 @@ with tab_compare:
             now_prog = st.session_state.get(prog_key, cur_prog)
             now_age  = str(st.session_state.get(age_key, cur_age_yr))
 
-            # Base (Gemini-preferred)
             X_one_base = X_test.iloc[[base_idx]]
             out_base = _prefer_gemini_row(X_one_base, X_test, model, label_map, docx, tone)
             st.session_state["last_llm_source"] = out_base.get("llm_source", "fallback")
 
-            # Scenario from state
             sc_row = base_row.copy()
             sc_row["ATTENDANCES"]   = 0 if now_att == "Above 80%" else 1
             sc_row["FINANCIAL_AID"] = 0 if now_fin == "Yes" else 1
@@ -1311,7 +1502,6 @@ with tab_compare:
             out_scn = _prefer_gemini_row(X_one, X_test, model, label_map, docx, tone)
             st.session_state["last_llm_source"] = out_scn.get("llm_source", "fallback")
 
-            # Try to ensure Gemini on both sides if possible
             if FORCE_GEMINI:
                 if str(out_base.get("llm_source","")).lower() != "gemini":
                     out_base = _prefer_gemini_row(X_one_base, X_test, model, label_map, docx, tone, tries=3)
@@ -1328,6 +1518,7 @@ with tab_compare:
         with colL:
             st.markdown("### Base")
             _banner(out_base["prediction"]["pred_label"], out_base["prediction"]["proba_dict"])
+            _risk_gauge(out_base["prediction"]["proba_dict"].get("At-Risk", 0.0))
             _bar(out_base["prediction"]["proba_dict"])
             cA, cB = st.columns(2)
             with cA: _feature_pills("SHAP (top-3)", out_base.get("shap_top", []), "shap")
@@ -1336,6 +1527,7 @@ with tab_compare:
         with colR:
             st.markdown("### Scenario")
             _banner(out_scn["prediction"]["pred_label"], out_scn["prediction"]["proba_dict"])
+            _risk_gauge(out_scn["prediction"]["proba_dict"].get("At-Risk", 0.0))
             _bar(out_scn["prediction"]["proba_dict"])
             cA, cB = st.columns(2)
             with cA: _feature_pills("SHAP (top-3)", out_scn.get("shap_top", []), "shap")
@@ -1348,3 +1540,5 @@ with tab_compare:
         sign   = "↓" if delta < 0 else ("↑" if delta > 0 else "→")
         st.markdown(f"**Δ P(At-Risk): {sign} {abs(delta):.1f} pp**  (Base {p_base*100:.1f}% → Scenario {p_scn*100:.1f}%)")
 
+        if delta <= -5.0:
+            st.success("Nice! Scenario reduces At-Risk probability by at least 5 pp.", icon="🎉")
