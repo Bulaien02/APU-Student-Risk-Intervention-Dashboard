@@ -8,48 +8,6 @@
       "category": "policy"
     },
     {
-      "id": "apu_student_affairs",
-      "title": "APU Student Affairs",
-      "type": "url",
-      "path_or_url": "https://www.apu.edu.my/life-at-apu/student-affairs",
-      "category": "support"
-    },
-    {
-      "id": "apu_counselling",
-      "title": "Counselling & Wellness",
-      "type": "url",
-      "path_or_url": "https://www.apu.edu.my/life-at-apu/counselling",
-      "category": "support"
-    },
-    {
-      "id": "apu_international",
-      "title": "APU International Students",
-      "type": "url",
-      "path_or_url": "https://www.apu.edu.my/international-students",
-      "category": "support"
-    },
-    {
-      "id": "apu_financial_assistance",
-      "title": "Financial Assistance",
-      "type": "url",
-      "path_or_url": "https://www.apu.edu.my/admissions/financial-assistance",
-      "category": "finance"
-    },
-    {
-      "id": "apu_scholarships",
-      "title": "Scholarships & Bursaries",
-      "type": "url",
-      "path_or_url": "https://www.apu.edu.my/admissions/scholarships",
-      "category": "finance"
-    },
-    {
-      "id": "apu_academic_policies",
-      "title": "Academic Policies",
-      "type": "url",
-      "path_or_url": "https://www.apu.edu.my/academics/academic-policies",
-      "category": "policy"
-    },
-    {
       "id": "apu_student_services",
       "title": "APU Student Services",
       "type": "url",
@@ -57,25 +15,53 @@
       "category": "support"
     },
     {
-      "id": "apu_health_support",
-      "title": "APU Health Support Services",
+      "id": "apu_international",
+      "title": "International Students (Home)",
       "type": "url",
-      "path_or_url": "https://www.apu.edu.my/experience/health-support-services",
+      "path_or_url": "https://www.apu.edu.my/international-students",
       "category": "support"
     },
     {
-      "id": "apu_bursary_loans",
-      "title": "APU Bursary & Loans",
+      "id": "apu_international_apply",
+      "title": "International Students — Application Procedures",
       "type": "url",
-      "path_or_url": "https://www.apu.edu.my/bursary-loans",
+      "path_or_url": "https://www.apu.edu.my/international-students-application-procedures",
+      "category": "support"
+    },
+    {
+      "id": "apu_scholarships",
+      "title": "Scholarships & Bursaries",
+      "type": "url",
+      "path_or_url": "https://www.apu.edu.my/study-at-apu/scholarships",
       "category": "finance"
     },
     {
-      "id": "apu_external_scholarships",
-      "title": "APU External Scholarships",
+      "id": "apu_campus_facilities",
+      "title": "Campus Facilities (incl. Health Support)",
       "type": "url",
-      "path_or_url": "https://www.apu.edu.my/index.php/study-area/external-scholarships",
-      "category": "finance"
+      "path_or_url": "https://www.apu.edu.my/experience/campus-facilities",
+      "category": "support"
+    },
+    {
+      "id": "apu_ldc",
+      "title": "APU Learning Development Centre",
+      "type": "url",
+      "path_or_url": "https://www.apu.edu.my/apu-learning-development-centre",
+      "category": "academic"
+    },
+    {
+      "id": "apu_digital_learning_hub",
+      "title": "Digital Learning Hub",
+      "type": "url",
+      "path_or_url": "https://www.apu.edu.my/digital-learning-hub",
+      "category": "academic"
+    },
+    {
+      "id": "apu_library",
+      "title": "APU Library",
+      "type": "url",
+      "path_or_url": "https://library.apu.edu.my/",
+      "category": "academic"
     }
   ]
 }
