@@ -31,11 +31,16 @@ def _find_project_root(start: Path) -> Path:
 APP_PATH = Path(__file__).resolve()
 APP_DIR  = APP_PATH.parent
 ROOT_DIR = _find_project_root(APP_DIR)
-if str(ROOT_DIR) not in sys.path:
-    sys.path.insert(0, str(ROOT_DIR))
 
-ASSETS_DIR = ROOT_DIR / "assets"
-DOCS_DIR   = ROOT_DIR / "docs"
+def _first_existing(*paths: Path):
+    for p in paths:
+        if p.exists():
+            return p
+    return None
+
+ASSETS_DIR = _first_existing(APP_DIR / "assets", ROOT_DIR / "assets") or (APP_DIR / "assets")
+DOCS_DIR = (ROOT_DIR / "docs") if (ROOT_DIR / "docs").exists() else (APP_DIR / "docs")
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Core imports
