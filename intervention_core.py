@@ -40,12 +40,20 @@ def _need(path: Optional[Path], label: str) -> Path:
     assert path is not None and path.exists(), f"Missing artifact: {label}"
     return path
 
-# Prefer root/<dir>, then notebooks/<dir>
-ART_DIR   = _first_existing(ROOT_DIR / "artifacts_models", FILE_DIR / "artifacts_models") or (ROOT_DIR / "artifacts_models")
-SPLIT_DIR = _first_existing(ROOT_DIR / "artifacts_split", FILE_DIR / "artifacts_split") or (ROOT_DIR / "artifacts_split")
-DOCS_DIR  = _first_existing(ROOT_DIR / "docs",             FILE_DIR / "docs")             or (ROOT_DIR / "docs")
+# Prefer notebooks/<dir> first, then root/<dir>
+ART_DIR    = _first_existing(FILE_DIR / "artifacts_models", ROOT_DIR / "artifacts_models") or (FILE_DIR / "artifacts_models")
+SPLIT_DIR  = _first_existing(FILE_DIR / "artifacts_split",  ROOT_DIR / "artifacts_split")  or (FILE_DIR / "artifacts_split")
+ASSETS_DIR = _first_existing(FILE_DIR / "assets",          ROOT_DIR / "assets")          or (FILE_DIR / "assets")
 
-LOGS_DIR  = _first_existing(ROOT_DIR / "logs",             FILE_DIR / "logs")             or (ROOT_DIR / "logs")
+# --- pick docs folder (prefer notebooks/docs, allow env override) ---
+DOCS_DIR = None
+if os.getenv("DOCS_DIR"):
+    DOCS_DIR = Path(os.getenv("DOCS_DIR")).resolve()
+else:
+    # prefer notebooks/docs, then repo-root/docs, else fall back to notebooks/docs
+    DOCS_DIR = _first_existing(FILE_DIR / "docs", ROOT_DIR / "docs") or (FILE_DIR / "docs")
+
+LOGS_DIR   = _first_existing(FILE_DIR / "logs",            ROOT_DIR / "logs")            or (FILE_DIR / "logs")
 LOGS_DIR.mkdir(exist_ok=True, parents=True)
 
 # ───────────────────────── Encodings (match your preprocessing) ─────────────────────────
@@ -325,15 +333,27 @@ def audit_docindex(path: str|Path, strict: bool=False) -> Dict[str,Any]:
         _id = str(src.get("id") or "").strip()
         typ = str(src.get("type") or "").strip().lower()
         tgt = str(src.get("path_or_url") or "").strip()
+
         ok, detail = True, ""
-        if typ in {"pdf","txt"}:
-            ok = Path(tgt).exists(); detail = "exists" if ok else "missing"
+        if typ in {"pdf", "txt"}:
+            pth = Path(tgt)
+            if not pth.is_absolute():
+                # 👇 use DOCS_DIR for relative paths
+                pth = (DOCS_DIR / tgt) if DOCS_DIR else pth
+            ok = pth.exists()
+            detail = "exists" if ok else "missing"
+            target_for_report = str(pth)
         elif typ == "url":
-            ok, code = _check_url(tgt); detail = f"http {code}" if code != -1 else "unreachable"
+            ok, code = _check_url(tgt)
+            detail = f"http {code}" if code != -1 else "unreachable"
+            target_for_report = tgt
         else:
             ok, detail = False, f"unknown type '{typ}'"
-        report.append({"id":_id, "type":typ, "target":tgt, "ok":ok, "detail":detail})
-        if not ok: issues.append(f"[{_id}] {typ}: {detail} -> {tgt}")
+            target_for_report = tgt
+
+        report.append({"id": _id, "type": typ, "target": target_for_report, "ok": ok, "detail": detail})
+        if not ok:
+            issues.append(f"[{_id}] {typ}: {detail} -> {target_for_report}")
 
     print("DocIndex audit:")
     for r in report:
@@ -347,16 +367,23 @@ def load_docindex(path: str|Path) -> "DocIndex":
     data = json.loads(p.read_text(encoding="utf-8"))
     idx = DocIndex()
     for s in data.get("sources", []):
-        _id = s["id"]; ttl = s.get("title", _id); typ = s["type"].lower(); tgt = s["path_or_url"]
-        cat = s.get("category","policy")
+        _id  = s["id"]
+        ttl  = s.get("title", _id)
+        typ  = s["type"].lower()
+        tgt  = s["path_or_url"]
+        cat  = s.get("category", "policy")
+
         try:
-            if typ in {"pdf","txt"}:
-                idx.add_file(tgt, source_id=_id, title=ttl, category=cat)
-            elif typ=="url":
+            if typ in {"pdf", "txt"}:
+                pth = Path(tgt)
+                if not pth.is_absolute():
+                    pth = (DOCS_DIR / tgt) if DOCS_DIR else pth
+                idx.add_file(str(pth), source_id=_id, title=ttl, category=cat)
+            elif typ == "url":
                 idx.add_url(tgt, source_id=_id, title=ttl, category=cat)
         except Exception as e:
             warnings.warn(f"Failed to add source {s}: {e}")
-    return idx.build()
+
 
 # ───────────────────────── Gemini + schema ─────────────────────────
 RiskLevel = Literal["low","medium","high"]
