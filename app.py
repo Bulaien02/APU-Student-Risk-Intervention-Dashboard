@@ -250,6 +250,7 @@ def _b64(img_path: Path) -> str:
     except Exception:
         return ""
 
+# Header (logos + compact style)
 def header():
     apu = _find_logo("apu")
     dmu = _find_logo("dmu")
@@ -970,11 +971,16 @@ with tab_demo:
         if st.button("🎲 Random", use_container_width=True, key="btn_demo_random"):
             st.session_state.demo_idx = random.randrange(len(X_test))
     with col_b:
-        idx = st.slider("Index", 0, len(X_test)-1, int(st.session_state.demo_idx), 1,
-                        key="demo_idx_slider", label_visibility="collapsed")
+        idx = st.selectbox(
+            "Select student index",
+            options=list(range(len(X_test))),
+            index=int(st.session_state.demo_idx),
+            format_func=lambda x: f"Student {x}",
+            key="demo_idx_selectbox"
+        )
         if idx != st.session_state.demo_idx:
             st.session_state.demo_idx = int(idx)
-        st.caption(f"Row: **{st.session_state.demo_idx}**")
+        st.caption(f"Selected: **Student {st.session_state.demo_idx}**")
     with col_c:
         run_demo = st.button("Generate demo", type="primary", use_container_width=True, key="btn_run_demo")
 
@@ -1344,8 +1350,15 @@ def _selectbox_ss(label: str, options: list[str], key: str, default_value: str):
 with tab_compare:
     st.caption("Clone a student, tweak inputs, and compare risk & plan. Gemini-first; fallback only if Gemini fails.")
 
-    base_idx = st.slider("Base row", 0, len(X_test) - 1, 0, 1, key="sc_base_idx")
+    base_idx = st.selectbox(
+        "Select base student for scenario",
+        options=list(range(len(X_test))),
+        index=0,
+        format_func=lambda x: f"Student {x}",
+        key="sc_base_selectbox"
+    )
     base_row = X_test.iloc[base_idx].copy()
+
 
     # Keys per base row
     att_key   = f"sc_att_{base_idx}"
