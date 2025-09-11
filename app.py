@@ -5,6 +5,7 @@ import os, sys, json, base64, random, html, io, datetime, time
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 from collections.abc import Mapping
+from io import BytesIO
 
 import numpy as np
 import pandas as pd
@@ -1618,3 +1619,4 @@ with tab_compare:
 
         if delta <= -5.0:
             st.success("Nice! Scenario reduces At-Risk probability by at least 5 pp.", icon="🎉")
+
