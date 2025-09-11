@@ -810,12 +810,24 @@ def _split_by_advisors(df: pd.DataFrame, advisors: list[str], sort_col: str = "P
     d["queue_pos"] = d.groupby("advisor_assigned").cumcount() + 1
     return d.reset_index(drop=True)
 
-def _excel_bytes_df(df: pd.DataFrame, sheet_name: str = "advising_log") -> bytes:
-    bio = BytesIO()
-    with pd.ExcelWriter(bio, engine="openpyxl") as writer:   # or engine="xlsxwriter"
-        df.to_excel(writer, index=False, sheet_name=sheet_name)
-    bio.seek(0)
-    return bio.getvalue()
+def _excel_bytes_df(df: pd.DataFrame, sheet_name: str = "advising_log"):
+    bio = io.BytesIO()
+    # 1) try XlsxWriter first
+    try:
+        with pd.ExcelWriter(bio, engine="xlsxwriter") as w:
+            df.to_excel(w, index=False, sheet_name=sheet_name)
+        bio.seek(0)
+        return bio.getvalue()
+    except Exception:
+        pass
+    # 2) fallback to openpyxl
+    try:
+        with pd.ExcelWriter(bio, engine="openpyxl") as w:
+            df.to_excel(w, index=False, sheet_name=sheet_name)
+        bio.seek(0)
+        return bio.getvalue()
+    except Exception:
+        return None  # no engine available
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Diagnostics
@@ -1301,50 +1313,50 @@ with tab_triage:
             )
         with col2:
             notes = st.text_area("Notes (applied to all rows in selection)", key="log_notes")
-
+    
         # runtime paths
         logs_dir = ROOT_DIR / "logs"
         logs_dir.mkdir(parents=True, exist_ok=True)
         logfile = logs_dir / "advising_log.csv"
-
-        # append current selection to the log
+    
+        # append current triage selection to the log
         make_log = st.button("Append to logs/advising_log.csv", type="primary", key="btn_log_append")
         if make_log:
             try:
-                log_df = table[show_cols].copy()
+                log_df = table[show_cols].copy()  # uses triage selection table/columns
                 ts = datetime.datetime.now().isoformat(timespec="seconds")
                 log_df.insert(0, "timestamp", ts)
                 log_df.insert(1, "advisor", advisor)
                 log_df.insert(2, "next_review", str(review_date))
                 log_df.insert(3, "notes", notes)
-
+    
                 if logfile.exists():
                     old = pd.read_csv(logfile)
                     all_df = pd.concat([old, log_df], ignore_index=True)
                 else:
                     all_df = log_df
-
+    
                 all_df.to_csv(logfile, index=False)
-
-                # optional: persist a timestamped copy for audit under /exports
+    
+                # optional evidence copy under /exports (timestamped)
                 exp_dir = ROOT_DIR / "exports"
                 exp_dir.mkdir(parents=True, exist_ok=True)
                 stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
                 all_df.tail(len(log_df)).to_csv(exp_dir / f"advising_selection_{stamp}.csv", index=False)
-
+    
                 st.success(f"Appended {len(log_df)} rows to {logfile.relative_to(ROOT_DIR)}")
             except Exception as e:
                 st.error(f"Failed to write log: {e}")
-
+    
         st.markdown("---")
-
-        # viewer + downloads (works on local and on Streamlit Cloud)
+    
+        # viewer + downloads (works on local and Streamlit Cloud)
         if logfile.exists():
             try:
                 df_all = pd.read_csv(logfile)
                 st.caption(f"Current advising log — {len(df_all)} rows")
                 st.dataframe(df_all.tail(50), use_container_width=True, hide_index=True)
-
+    
                 c1, c2 = st.columns(2)
                 with c1:
                     st.download_button(
@@ -1356,14 +1368,18 @@ with tab_triage:
                         key="dl_log_csv",
                     )
                 with c2:
-                    st.download_button(
-                        "Download advising_log (Excel)",
-                        _excel_bytes_df(df_all),
-                        file_name="advising_log.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        use_container_width=True,
-                        key="dl_log_xlsx",
-                    )
+                    xlsx_bytes = _excel_bytes_df(df_all)
+                    if xlsx_bytes:
+                        st.download_button(
+                            "Download advising_log (Excel)",
+                            xlsx_bytes,
+                            file_name="advising_log.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            use_container_width=True,
+                            key="dl_log_xlsx",
+                        )
+                    else:
+                        st.caption("Excel export requires **XlsxWriter** or **openpyxl**.")
             except Exception as e:
                 st.warning(f"Could not display/download log: {e}")
         else:
@@ -1619,4 +1635,5 @@ with tab_compare:
 
         if delta <= -5.0:
             st.success("Nice! Scenario reduces At-Risk probability by at least 5 pp.", icon="🎉")
+
 
