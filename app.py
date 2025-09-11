@@ -14,7 +14,11 @@ import matplotlib.pyplot as plt
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Page config
-st.set_page_config(page_title="APU Predictive Academic Intervention Dashboard", page_icon="🎓", layout="wide")
+st.set_page_config(
+    page_title="APU Predictive Academic Intervention Dashboard",
+    page_icon="🎓",
+    layout="wide",
+)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Project root detection
@@ -41,7 +45,6 @@ def _first_existing(*paths: Path):
 
 ASSETS_DIR = _first_existing(APP_DIR / "assets", ROOT_DIR / "assets") or (APP_DIR / "assets")
 DOCS_DIR = (ROOT_DIR / "docs") if (ROOT_DIR / "docs").exists() else (APP_DIR / "docs")
-
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Core imports
@@ -393,7 +396,6 @@ div.stButton > button[kind="primary"]:hover{
 """, unsafe_allow_html=True)
 
 # Small "About" expander
-# --- Professional About panel (replace your current expander) ---
 def render_about_panel():
     hi = int(THRESH.get("high", 0.60) * 100)
     med = int(THRESH.get("medium", 0.35) * 100)
@@ -509,9 +511,7 @@ def render_about_panel():
                 """
             )
 
-# Call this once where you previously had the simple expander:
 render_about_panel()
-
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Helpers
@@ -690,7 +690,6 @@ def _render_plan(plan: Dict[str, Any], tone: str, llm_source: str, dl_key: str):
         key=dl_key,
     )
 
-
 # 🎊 Confetti effect (CSS-only, auto-cleans)
 def _confetti(n: int = 80, duration: float = 2.6):
     colors = ['#f44336','#ff9800','#ffeb3b','#4caf50','#2196f3','#9c27b0']
@@ -726,7 +725,8 @@ def _confetti(n: int = 80, duration: float = 2.6):
     time.sleep(duration + 0.8)
     ph.empty()
 
-# Export helpers
+# ──────────────────────────────────────────────────────────────────────────────
+# Export helpers (CSV/Excel)
 def _flatten_for_csv(run_id: str, tone: str, llm_source: str,
                      pred: Dict[str, Any], plan: Dict[str, Any],
                      inputs_snapshot: Dict[str, Any] | None = None) -> pd.DataFrame:
@@ -828,6 +828,14 @@ def _excel_bytes_df(df: pd.DataFrame, sheet_name: str = "advising_log"):
         return bio.getvalue()
     except Exception:
         return None  # no engine available
+
+def _csv_bytes_utf8_bom(df: pd.DataFrame, text_cols: list[str] | None = None) -> bytes:
+    """Return CSV bytes with UTF-8 BOM so Excel detects encoding; coerce selected columns to string."""
+    out = df.copy()
+    for c in (text_cols or []):
+        if c in out.columns:
+            out[c] = out[c].astype(str)
+    return out.to_csv(index=False).encode("utf-8-sig")
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Diagnostics
@@ -968,15 +976,24 @@ with tab_manual:
             flat = _flatten_for_csv(out["run_id"], tone, out.get("llm_source","fallback"),
                                     {**out["prediction"], "shap_top": out.get("shap_top", []), "lime_top": out.get("lime_top", [])},
                                     out["plan"], inputs_snapshot)
-            st.download_button("Download result (CSV)", data=flat.to_csv(index=False).encode("utf-8"),
-                               file_name=f"result_{out['run_id']}.csv", mime="text/csv",
-                               use_container_width=True, key=f"dl-csv-{out['run_id']}")
+            st.download_button(
+                "Download result (CSV)",
+                data=_csv_bytes_utf8_bom(flat),
+                file_name=f"result_{out['run_id']}.csv",
+                mime="text/csv",
+                use_container_width=True,
+                key=f"dl-csv-{out['run_id']}",
+            )
             xbytes = _excel_bytes(flat, out["plan"])
             if xbytes is not None:
-                st.download_button("Download result (Excel)", data=xbytes,
-                                   file_name=f"result_{out['run_id']}.xlsx",
-                                   mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                   use_container_width=True, key=f"dl-xlsx-{out['run_id']}")
+                st.download_button(
+                    "Download result (Excel)",
+                    data=xbytes,
+                    file_name=f"result_{out['run_id']}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True,
+                    key=f"dl-xlsx-{out['run_id']}",
+                )
             else:
                 st.caption("Install **openpyxl** or **xlsxwriter** to enable Excel export.")
 
@@ -1033,15 +1050,24 @@ with tab_demo:
             flat = _flatten_for_csv(out["run_id"], tone, out.get("llm_source","fallback"),
                                     {**out["prediction"], "shap_top": out.get("shap_top", []), "lime_top": out.get("lime_top", [])},
                                     out["plan"], inputs_snapshot=raw_feats)
-            st.download_button("Download result (CSV)", data=flat.to_csv(index=False).encode("utf-8"),
-                               file_name=f"result_{out['run_id']}.csv", mime="text/csv",
-                               use_container_width=True, key=f"dl-csv-demo-{out['run_id']}")
+            st.download_button(
+                "Download result (CSV)",
+                data=_csv_bytes_utf8_bom(flat),
+                file_name=f"result_{out['run_id']}.csv",
+                mime="text/csv",
+                use_container_width=True,
+                key=f"dl-csv-demo-{out['run_id']}",
+            )
             xbytes = _excel_bytes(flat, out["plan"])
             if xbytes is not None:
-                st.download_button("Download result (Excel)", data=xbytes,
-                                   file_name=f"result_{out['run_id']}.xlsx",
-                                   mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                   use_container_width=True, key=f"dl-xlsx-demo-{out['run_id']}")
+                st.download_button(
+                    "Download result (Excel)",
+                    data=xbytes,
+                    file_name=f"result_{out['run_id']}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True,
+                    key=f"dl-xlsx-demo-{out['run_id']}",
+                )
             else:
                 st.caption("Install **openpyxl** or **xlsxwriter** to enable Excel export.")
 
@@ -1270,16 +1296,27 @@ with tab_triage:
         }
     )
 
-    csv_bytes = table[show_cols].to_csv(index=False).encode("utf-8")
-    st.download_button("Download Triage (CSV)", data=csv_bytes,
-                       file_name="triage_list.csv", mime="text/csv",
-                       use_container_width=True, key="triage_csv")
+    st.download_button(
+        "Download Triage (CSV)",
+        data=_csv_bytes_utf8_bom(
+            table[show_cols],
+            text_cols=["row_id", "Programme", "Level", "Attendance", "Reasons"]
+        ),
+        file_name="triage_list.csv",
+        mime="text/csv",
+        use_container_width=True,
+        key="triage_csv",
+    )
     xbytes = _excel_bytes_table(table[show_cols], sheet_name="triage")
     if xbytes is not None:
-        st.download_button("Download Triage (Excel)", data=xbytes,
-                           file_name="triage_list.xlsx",
-                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                           use_container_width=True, key="triage_xlsx")
+        st.download_button(
+            "Download Triage (Excel)",
+            data=xbytes,
+            file_name="triage_list.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+            key="triage_xlsx",
+        )
     else:
         st.caption("Install **openpyxl** or **xlsxwriter** to enable Excel export.")
 
@@ -1290,15 +1327,27 @@ with tab_triage:
             if advisors:
                 split_df = _split_by_advisors(table[show_cols], advisors, sort_col="P_AtRisk")
                 st.dataframe(split_df, use_container_width=True, hide_index=True)
-                st.download_button("Download split (CSV)", data=split_df.to_csv(index=False).encode("utf-8"),
-                                   file_name="triage_split_by_advisor.csv", mime="text/csv",
-                                   use_container_width=True, key="triage_split_csv")
+                st.download_button(
+                    "Download split (CSV)",
+                    data=_csv_bytes_utf8_bom(
+                        split_df,
+                        text_cols=["row_id", "Programme", "Level", "Attendance", "Reasons", "advisor_assigned"]
+                    ),
+                    file_name="triage_split_by_advisor.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                    key="triage_split_csv",
+                )
                 xsplit = _excel_bytes_table(split_df, sheet_name="triage_split")
                 if xsplit is not None:
-                    st.download_button("Download split (Excel)", data=xsplit,
-                                       file_name="triage_split_by_advisor.xlsx",
-                                       mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                       use_container_width=True, key="triage_split_xlsx")
+                    st.download_button(
+                        "Download split (Excel)",
+                        data=xsplit,
+                        file_name="triage_split_by_advisor.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True,
+                        key="triage_split_xlsx",
+                    )
                 else:
                     st.caption("Install **openpyxl** or **xlsxwriter** to enable Excel export.")
 
@@ -1313,55 +1362,62 @@ with tab_triage:
             )
         with col2:
             notes = st.text_area("Notes (applied to all rows in selection)", key="log_notes")
-    
+
         # runtime paths
         logs_dir = ROOT_DIR / "logs"
         logs_dir.mkdir(parents=True, exist_ok=True)
         logfile = logs_dir / "advising_log.csv"
-    
+
         # append current triage selection to the log
         make_log = st.button("Append to logs/advising_log.csv", type="primary", key="btn_log_append")
         if make_log:
             try:
-                log_df = table[show_cols].copy()  # uses triage selection table/columns
+                log_df = table[show_cols].copy()
                 ts = datetime.datetime.now().isoformat(timespec="seconds")
                 log_df.insert(0, "timestamp", ts)
                 log_df.insert(1, "advisor", advisor)
                 log_df.insert(2, "next_review", str(review_date))
                 log_df.insert(3, "notes", notes)
-    
+
                 if logfile.exists():
                     old = pd.read_csv(logfile)
                     all_df = pd.concat([old, log_df], ignore_index=True)
                 else:
                     all_df = log_df
-    
+
                 all_df.to_csv(logfile, index=False)
-    
-                # optional evidence copy under /exports (timestamped)
+
+                # optional evidence copy under /exports (timestamped) — write with BOM for Excel convenience
                 exp_dir = ROOT_DIR / "exports"
                 exp_dir.mkdir(parents=True, exist_ok=True)
                 stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-                all_df.tail(len(log_df)).to_csv(exp_dir / f"advising_selection_{stamp}.csv", index=False)
-    
+                all_df.tail(len(log_df)).to_csv(exp_dir / f"advising_selection_{stamp}.csv",
+                                                index=False, encoding="utf-8-sig")
+
                 st.success(f"Appended {len(log_df)} rows to {logfile.relative_to(ROOT_DIR)}")
             except Exception as e:
                 st.error(f"Failed to write log: {e}")
-    
+
         st.markdown("---")
-    
+
         # viewer + downloads (works on local and Streamlit Cloud)
         if logfile.exists():
             try:
                 df_all = pd.read_csv(logfile)
                 st.caption(f"Current advising log — {len(df_all)} rows")
                 st.dataframe(df_all.tail(50), use_container_width=True, hide_index=True)
-    
+
                 c1, c2 = st.columns(2)
                 with c1:
                     st.download_button(
                         "Download advising_log (CSV)",
-                        df_all.to_csv(index=False).encode("utf-8"),
+                        _csv_bytes_utf8_bom(
+                            df_all,
+                            text_cols=[
+                                "timestamp","advisor","next_review","notes",
+                                "row_id","Programme","Level","Attendance","Reasons"
+                            ]
+                        ),
                         file_name="advising_log.csv",
                         mime="text/csv",
                         use_container_width=True,
@@ -1433,7 +1489,6 @@ with tab_compare:
         key="sc_base_selectbox"
     )
     base_row = X_test.iloc[base_idx].copy()
-
 
     # Keys per base row
     att_key   = f"sc_att_{base_idx}"
@@ -1635,5 +1690,3 @@ with tab_compare:
 
         if delta <= -5.0:
             st.success("Nice! Scenario reduces At-Risk probability by at least 5 pp.", icon="🎉")
-
-
