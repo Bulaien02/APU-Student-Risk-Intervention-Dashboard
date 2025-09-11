@@ -404,7 +404,7 @@ def render_about_panel():
             ### APU Predictive Academic Intervention Dashboard
             This application helps staff **identify at-risk students early**, **explain the drivers** behind each prediction, and **generate tailored intervention plans** grounded in APU resources.
 
-            **What you’ll get on every run**
+            **What you'll get on every run**
             - **Risk**: At-Risk / Average / Excellent, with probabilities  
             - **Why**: Top drivers (SHAP & LIME) in plain language  
             - **Action**: A structured, tone-aware plan (LLM: **{llm_label}**) plus relevant APU links  
@@ -808,6 +808,13 @@ def _split_by_advisors(df: pd.DataFrame, advisors: list[str], sort_col: str = "P
     d["advisor_assigned"] = [advisors[i % k] for i in range(len(d))]
     d["queue_pos"] = d.groupby("advisor_assigned").cumcount() + 1
     return d.reset_index(drop=True)
+
+def _excel_bytes_df(df: pd.DataFrame, sheet_name: str = "advising_log") -> bytes:
+    bio = BytesIO()
+    with pd.ExcelWriter(bio, engine="openpyxl") as writer:   # or engine="xlsxwriter"
+        df.to_excel(writer, index=False, sheet_name=sheet_name)
+    bio.seek(0)
+    return bio.getvalue()
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Diagnostics
@@ -1286,29 +1293,80 @@ with tab_triage:
         col1, col2 = st.columns([1, 3])
         with col1:
             advisor = st.text_input("Advisor", value=os.getenv("USERNAME", "") or "", key="log_advisor")
-            review_date = st.date_input("Next review date", value=datetime.date.today() + datetime.timedelta(days=14), key="log_date")
+            review_date = st.date_input(
+                "Next review date",
+                value=datetime.date.today() + datetime.timedelta(days=14),
+                key="log_date",
+            )
         with col2:
             notes = st.text_area("Notes (applied to all rows in selection)", key="log_notes")
+
+        # runtime paths
+        logs_dir = ROOT_DIR / "logs"
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        logfile = logs_dir / "advising_log.csv"
+
+        # append current selection to the log
         make_log = st.button("Append to logs/advising_log.csv", type="primary", key="btn_log_append")
         if make_log:
             try:
-                logs_dir = ROOT_DIR / "logs"
-                logs_dir.mkdir(parents=True, exist_ok=True)
-                logfile = logs_dir / "advising_log.csv"
                 log_df = table[show_cols].copy()
-                log_df.insert(0, "timestamp", datetime.datetime.now().isoformat(timespec="seconds"))
+                ts = datetime.datetime.now().isoformat(timespec="seconds")
+                log_df.insert(0, "timestamp", ts)
                 log_df.insert(1, "advisor", advisor)
                 log_df.insert(2, "next_review", str(review_date))
                 log_df.insert(3, "notes", notes)
+
                 if logfile.exists():
                     old = pd.read_csv(logfile)
                     all_df = pd.concat([old, log_df], ignore_index=True)
                 else:
                     all_df = log_df
+
                 all_df.to_csv(logfile, index=False)
+
+                # optional: persist a timestamped copy for audit under /exports
+                exp_dir = ROOT_DIR / "exports"
+                exp_dir.mkdir(parents=True, exist_ok=True)
+                stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+                all_df.tail(len(log_df)).to_csv(exp_dir / f"advising_selection_{stamp}.csv", index=False)
+
                 st.success(f"Appended {len(log_df)} rows to {logfile.relative_to(ROOT_DIR)}")
             except Exception as e:
                 st.error(f"Failed to write log: {e}")
+
+        st.markdown("---")
+
+        # viewer + downloads (works on local and on Streamlit Cloud)
+        if logfile.exists():
+            try:
+                df_all = pd.read_csv(logfile)
+                st.caption(f"Current advising log — {len(df_all)} rows")
+                st.dataframe(df_all.tail(50), use_container_width=True, hide_index=True)
+
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.download_button(
+                        "Download advising_log (CSV)",
+                        df_all.to_csv(index=False).encode("utf-8"),
+                        file_name="advising_log.csv",
+                        mime="text/csv",
+                        use_container_width=True,
+                        key="dl_log_csv",
+                    )
+                with c2:
+                    st.download_button(
+                        "Download advising_log (Excel)",
+                        _excel_bytes_df(df_all),
+                        file_name="advising_log.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True,
+                        key="dl_log_xlsx",
+                    )
+            except Exception as e:
+                st.warning(f"Could not display/download log: {e}")
+        else:
+            st.caption("No advising log found yet.")
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Scenario Compare helpers (preset queue)
