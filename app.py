@@ -853,6 +853,116 @@ with st.expander("🧪 Diagnostics", expanded=False):
         diag_chip("last_plan_source", last_src if last_src != "-" else "-"),
     ]
     st.markdown("<div class='diag'><div class='chips-row'>" + "".join(chips) + "</div></div>", unsafe_allow_html=True)
+    
+    # ───────── Bulk dataset audit (programme + playbook) ─────────
+    with st.expander("📊 Bulk dataset audit (1500+ rows)"):
+        st.caption("Checks programme detection and playbook effect across the whole test set.")
+
+        def _programme_name_from_row(row: pd.Series) -> str:
+            pcs = [c for c in feature_order if c.startswith("Programme_")]
+            if not pcs:
+                return "Unknown"
+            names = [c.replace("Programme_", "").replace("_", " ") for c in pcs]
+            # robust: trust argmax on floats
+            j = int(np.nanargmax(row[pcs].astype(float).values))
+            return names[j]
+
+        # A) Programme detection quality
+        if st.button("Run programme check", use_container_width=True, key="btn_prog_audit"):
+            pcs = [c for c in feature_order if c.startswith("Programme_")]
+            if not pcs:
+                st.info("No programme one-hot columns found.")
+            else:
+                # robust names via argmax
+                robust_prog = X_test.apply(_programme_name_from_row, axis=1)
+                # brittle names (old logic that gated on ==1) just for comparison
+                def _old_prog(row):
+                    names = [c.replace("Programme_", "").replace("_", " ") for c in pcs]
+                    if len(pcs) == 1:
+                        return names[0] if int(row[pcs[0]]) == 1 else "Unknown"
+                    j = int(np.argmax(row[pcs].values))
+                    return names[j] if row[pcs[j]] == 1 else "Unknown"
+                old_prog = X_test.apply(_old_prog, axis=1)
+
+                total = len(X_test)
+                mismatches = int((robust_prog != old_prog).sum())
+                unknown_old = int((old_prog == "Unknown").sum())
+
+                st.write(
+                    f"- Rows: **{total}**  ·  "
+                    f"Old-vs-robust programme mismatches: **{mismatches}**  ·  "
+                    f"`Unknown` (old logic): **{unknown_old}**"
+                )
+
+                st.dataframe(
+                    robust_prog.value_counts(dropna=False)
+                            .rename_axis("Programme")
+                            .reset_index(name="count"),
+                    hide_index=True,
+                    use_container_width=True,
+                )
+
+                st.caption("Tip: If two very similar programme names appear, consider normalising labels in preprocessing.")
+
+
+        # B) Playbook effect at scale (model-only; no LLM)
+        if st.button("Run playbook effect check", type="primary", use_container_width=True, key="btn_playbook_audit"):
+            # locate the At-Risk column in predict_proba
+            classes = [label_map[int(c)] for c in model.classes_]
+            try:
+                atrisk_ix = classes.index("At-Risk")
+            except ValueError:
+                atrisk_ix = 0  # fallback
+
+            # base probabilities
+            base_p = model.predict_proba(X_test)[:, atrisk_ix]
+
+            # scenario = apply Stabilize & Support but keep Programme/Level/Age identical
+            X_scn = X_test.copy()
+            if "ATTENDANCES" in X_scn.columns:   X_scn["ATTENDANCES"] = 0  # Above 80%
+            if "FINANCIAL_AID" in X_scn.columns: X_scn["FINANCIAL_AID"] = 0  # Yes
+            if "LOWER_LEVEL" in X_scn.columns:   X_scn["LOWER_LEVEL"]   = 0  # No
+            # DO NOT touch 'Level/Year', 'AGE', or Programme_* one-hots
+
+            scn_p = model.predict_proba(X_scn)[:, atrisk_ix]
+            delta = (scn_p - base_p) * 100.0  # percentage points
+
+            improved = int((delta < -1e-9).sum())
+            worsened = int((delta >  1e-9).sum())
+            unchanged = len(delta) - improved - worsened
+            mean_pp = float(delta.mean())
+            p25, p50, p75 = np.percentile(delta, [25, 50, 75])
+
+            st.write(
+                f"**Δ P(At-Risk) (scenario − base, pp):** "
+                f"mean **{mean_pp:+.2f}**, median **{p50:+.2f}**, "
+                f"IQR **[{p25:+.2f}, {p75:+.2f}]**  ·  "
+                f"Improved **{improved}**, Worsened **{worsened}**, Unchanged **{unchanged}**."
+            )
+
+            # show the top movers (improve/worsen)
+            res = pd.DataFrame({
+                "row_id": np.arange(len(delta)),
+                "base_p_atrisk_%": (base_p*100).round(2),
+                "scen_p_atrisk_%": (scn_p*100).round(2),
+                "delta_pp": delta.round(2),
+                "Programme": X_test.apply(_programme_name_from_row, axis=1) if any(c.startswith("Programme_") for c in X_test.columns) else "Unknown",
+                "Level": X_test["Level/Year"] if "Level/Year" in X_test.columns else "?"
+            })
+            st.caption("Top 10 biggest improvements (most negative deltas)")
+            st.dataframe(res.sort_values("delta_pp").head(10), hide_index=True, use_container_width=True)
+            st.caption("Top 10 biggest regressions (most positive deltas)")
+            st.dataframe(res.sort_values("delta_pp", ascending=False).head(10), hide_index=True, use_container_width=True)
+
+            st.download_button(
+                "Download full playbook audit (CSV)",
+                res.to_csv(index=False).encode("utf-8-sig"),
+                file_name="playbook_audit.csv",
+                mime="text/csv",
+                use_container_width=True,
+                key="dl_playbook_audit_csv",
+            )
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Tone + tabs
@@ -1085,6 +1195,8 @@ def compute_triage(
     preds = pd.DataFrame(proba, columns=classes, index=X.index)
     preds["predicted"] = preds[classes].idxmax(axis=1)
     preds["P_AtRisk"] = preds.get("At-Risk", pd.Series([0.0] * len(preds), index=preds.index))
+
+    # Programme name (from one-hots)
     prog_cols = [c for c in feature_order if c.startswith("Programme_")]
     if prog_cols:
         names = [c.replace("Programme_", "").replace("_", " ") for c in prog_cols]
@@ -1095,15 +1207,20 @@ def compute_triage(
         preds["Programme"] = vals
     else:
         preds["Programme"] = "Unknown"
+
+    # Attendance label
     if "ATTENDANCES" in X.columns:
         preds["Attendance"] = ["Above 80%" if int(v) == 0 else "Below 80%" for v in X["ATTENDANCES"].values]
     else:
         preds["Attendance"] = "Unknown"
+
+    # Level label
     if "Level/Year" in X.columns:
-        rev = {0:"Level 1",1:"Level 2",2:"Level 3"}
+        rev = {0: "Level 1", 1: "Level 2", 2: "Level 3"}
         preds["Level"] = [rev.get(int(v), str(v)) for v in X["Level/Year"].values]
     else:
         preds["Level"] = "?"
+
     return preds
 
 def _pretty_feat(name: str) -> str:
@@ -1468,13 +1585,57 @@ def _apply_pending_presets_if_any(base_idx: int) -> None:
 
 # ✅ Helper: first render uses default index, afterwards rely purely on session_state
 def _selectbox_ss(label: str, options: list[str], key: str, default_value: str):
+    # If we already have a value, let Streamlit reuse it.
     if key in st.session_state:
         return st.selectbox(label, options, key=key)
+
+    # Exact match first
+    if default_value in options:
+        return st.selectbox(label, options, index=options.index(default_value), key=key)
+
+    # Try a normalised match (case/space-insensitive)
+    norm = lambda s: " ".join(str(s).split()).strip().lower()
     try:
-        default_idx = options.index(default_value)
+        idx = [norm(o) for o in options].index(norm(default_value))
     except ValueError:
-        default_idx = 0
-    return st.selectbox(label, options, index=default_idx, key=key)
+        idx = 0  # last resort, but this will be rare now
+    return st.selectbox(label, options, index=idx, key=key)
+
+def _p_atrisk_for_row(row_series: pd.Series) -> float:
+    """Return P(At-Risk) for a 1-row Series using the trained model."""
+    X_one = pd.DataFrame([row_series.values], columns=X_test.columns)
+    proba = model.predict_proba(X_one)[0]
+    cls_to_name = {int(c): label_map[int(c)] for c in model.classes_}
+    at_idx = list(cls_to_name.values()).index("At-Risk")
+    return float(proba[at_idx])
+
+def _suggest_best_tweak(base_row: pd.Series) -> tuple[dict, float, float]:
+    """Try a few toggles and return (best_changes, base_p, best_p)."""
+    base_p = _p_atrisk_for_row(base_row)
+
+    candidates: list[dict] = [
+        {},  # no change
+        {"ATTENDANCES": 0},                               # ≥80%
+        {"FINANCIAL_AID": 0},                             # Aid=Yes
+        {"LOWER_LEVEL": 0},                               # Lower level=No
+        {"ATTENDANCES": 0, "FINANCIAL_AID": 0},
+        {"ATTENDANCES": 0, "LOWER_LEVEL": 0},
+        {"FINANCIAL_AID": 0, "LOWER_LEVEL": 0},
+        {"ATTENDANCES": 0, "FINANCIAL_AID": 0, "LOWER_LEVEL": 0},
+    ]
+
+    best_changes, best_p = {}, base_p
+    for ch in candidates:
+        sc = base_row.copy()
+        for k, v in ch.items():
+            if k in sc.index:
+                sc[k] = v
+        p = _p_atrisk_for_row(sc)
+        if p < best_p:
+            best_p, best_changes = p, ch
+    return best_changes, base_p, best_p
+
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # SCENARIO COMPARE
@@ -1516,6 +1677,17 @@ with tab_compare:
     if prog_cols:
         j = int(np.argmax(base_row[prog_cols].values))
         cur_prog = prog_names[j] if base_row[prog_cols[j]] == 1 else "Unknown"
+        
+    # --- Reset scenario controls when base student changes ---
+    if st.session_state.get("__last_base_idx") != base_idx:
+        st.session_state["__last_base_idx"] = base_idx
+        st.session_state[att_key]   = att_label
+        st.session_state[level_key] = cur_level
+        st.session_state[fin_key]   = fin_label
+        st.session_state[low_key]   = low_label
+        st.session_state[prog_key]  = cur_prog
+        st.session_state[age_key]   = str(cur_age_yr)
+
 
     # Controls row (using session-state-aware selectbox)
     c1, c2, c3, c4 = st.columns(4)
@@ -1603,22 +1775,46 @@ with tab_compare:
 
     playbook_text = (
         "Quick preset bundle: sets **Attendance ≥ 80%**, **Financial aid = Yes**, "
-        "and **Lower level = No**. Leaves Programme, Level/Year, and Age unchanged."
+        "and **Lower level = No**. Keeps Programme, Level/Year, and Age at the base row."
     )
+
     clicked_playbook = st.button(
         "Apply playbook: Stabilize & Support",
         use_container_width=True,
         key=f"playbook_stab_main_{base_idx}",
-        help="Sets Attendance ≥80%, Financial aid = Yes, Lower level = No"
+        help="Sets Attendance ≥80%, Financial aid = Yes, Lower level = No; others pinned to base"
     )
-    st.caption(playbook_text)
 
     if clicked_playbook:
         _queue_multi_presets({
+            # apply only the intended changes...
             att_key: "Above 80%",
             fin_key: "Yes",
             low_key: "No",
+            # ...but pin the rest to the base student to avoid stray state
+            prog_key:  cur_prog,
+            level_key: cur_level,        # keep level at base (remove this line if you prefer 'leave as-is')
+            age_key:   str(cur_age_yr),
         }, base_idx)
+
+    
+    if st.button("Suggest best tweak (data-driven)", use_container_width=True, key=f"suggest_{base_idx}"):
+        changes, p0, p1 = _suggest_best_tweak(base_row)
+
+        kv = {}
+        if "ATTENDANCES" in changes:
+            kv[att_key] = "Above 80%" if changes["ATTENDANCES"] == 0 else "Below 80%"
+        if "FINANCIAL_AID" in changes:
+            kv[fin_key] = "Yes" if changes["FINANCIAL_AID"] == 0 else "No"
+        if "LOWER_LEVEL" in changes:
+            kv[low_key] = "Yes" if changes["LOWER_LEVEL"] == 1 else "No"
+
+        if kv:
+            _queue_multi_presets(kv, base_idx)
+            st.success(f"Suggested change(s) applied. ΔP(At-Risk) ≈ {(p1-p0)*100:.1f} pp.")
+        else:
+            st.info("No tweak beats the base for this student.")
+
 
     if st.button("Run compare", type="primary", use_container_width=True, key=f"btn_run_compare_{base_idx}"):
         try:
